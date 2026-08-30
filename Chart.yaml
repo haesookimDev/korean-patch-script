@@ -1,0 +1,12 @@
+apiVersion: v2
+name: company-ai-gateway
+description: Example wrapper chart for the GitLab AI Gateway
+type: application
+version: 0.1.0
+
+# templates/ 없이 dependency chart의 리소스만 렌더링한다.
+dependencies:
+  - name: ai-gateway
+    version: 0.15.1
+    repository: https://gitlab.com/api/v4/projects/gitlab-org%2fcharts%2fai-gateway-helm-chart/packages/helm/devel
+

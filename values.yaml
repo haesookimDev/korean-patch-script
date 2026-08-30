@@ -1,0 +1,22 @@
+# Chart.yaml의 dependency 이름 아래에 기존 AI Gateway 값을 둔다.
+ai-gateway:
+  replicaCount: 2
+
+  image:
+    pullPolicy: IfNotPresent
+
+  gitlab:
+    url: https://gitlab.example.internal/
+    apiUrl: https://gitlab.example.internal/api/v4/
+
+  ingress:
+    enabled: false
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+

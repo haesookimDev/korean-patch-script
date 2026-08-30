@@ -1,0 +1,134 @@
+# 이 파일 하나가 스크립트 실행에 필요한 모든 추가 리소스를 포함한다.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-gateway-post-deploy
+  namespace: ai-gateway
+  labels:
+    app.kubernetes.io/name: ai-gateway-post-deploy
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-gateway-post-deploy
+  namespace: ai-gateway
+rules:
+  # Ready 확인에 필요한 읽기 권한만 허용한다.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-gateway-post-deploy
+  namespace: ai-gateway
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ai-gateway-post-deploy
+subjects:
+  - kind: ServiceAccount
+    name: ai-gateway-post-deploy
+    namespace: ai-gateway
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ai-gateway-post-deploy
+  namespace: ai-gateway
+  labels:
+    app.kubernetes.io/name: ai-gateway-post-deploy
+spec:
+  # AI Gateway가 아직 생성되지 않은 경우 wait initContainer가 종료되고
+  # Job controller가 새 Pod로 재시도한다. activeDeadlineSeconds가 전체 상한이다.
+  backoffLimit: 30
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 86400
+  # 실제 사용자 스크립트 실패는 대기 재시도와 구분해 즉시 Job 실패로 처리한다.
+  podFailurePolicy:
+    rules:
+      - action: FailJob
+        onExitCodes:
+          containerName: run-script
+          operator: NotIn
+          values: [0]
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-gateway-post-deploy
+    spec:
+      serviceAccountName: ai-gateway-post-deploy
+      automountServiceAccountToken: true
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-ai-gateway-deployments
+          image: registry.k8s.io/kubectl:v1.34.1
+          imagePullPolicy: IfNotPresent
+          command: ["kubectl"]
+          args:
+            - wait
+            - deployments
+            - --namespace=ai-gateway
+            - --selector=app.kubernetes.io/instance=ai-gateway
+            - --for=condition=Available
+            - --timeout=10m
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+        - name: wait-for-ai-gateway-pods
+          image: registry.k8s.io/kubectl:v1.34.1
+          imagePullPolicy: IfNotPresent
+          command: ["kubectl"]
+          args:
+            - wait
+            - pods
+            - --namespace=ai-gateway
+            - --selector=app.kubernetes.io/instance=ai-gateway
+            - --for=condition=Ready
+            - --timeout=10m
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: run-script
+          image: alpine:3.22
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "/opt/post-deploy/run.sh"]
+          envFrom:
+            - secretRef:
+                name: post-deploy-secret
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: script
+              mountPath: /opt/post-deploy
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: script
+          configMap:
+            name: ai-gateway-post-deploy-script
+            defaultMode: 0555
+        - name: tmp
+          emptyDir: {}

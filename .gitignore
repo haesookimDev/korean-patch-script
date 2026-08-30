@@ -1,0 +1,8 @@
+# Real deployment inputs can contain credentials.
+secrets.yaml
+*.secret.yaml
+
+# Local test evidence and temporary render output.
+.artifacts/
+rendered.yaml
+
