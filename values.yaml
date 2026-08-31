@@ -3,6 +3,9 @@ ai-gateway:
   replicaCount: 2
 
   image:
+    # 폐쇄망에 미러링된 실제 AI Gateway 이미지로 교체한다.
+    repository: registry.example.internal/gitlab/ai-gateway
+    tag: self-hosted-v19.2.0-ee
     pullPolicy: IfNotPresent
 
   gitlab:
@@ -19,4 +22,3 @@ ai-gateway:
     limits:
       cpu: 500m
       memory: 1Gi
-

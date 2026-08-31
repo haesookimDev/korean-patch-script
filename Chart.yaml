@@ -8,5 +8,5 @@ version: 0.1.0
 dependencies:
   - name: ai-gateway
     version: 0.15.1
-    repository: https://gitlab.com/api/v4/projects/gitlab-org%2fcharts%2fai-gateway-helm-chart/packages/helm/devel
-
+    # 폐쇄망 내부 Helm repository 주소로 교체한다.
+    repository: https://helm.example.internal/repository/gitlab-ai-gateway

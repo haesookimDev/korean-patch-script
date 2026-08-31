@@ -45,19 +45,9 @@ metadata:
   labels:
     app.kubernetes.io/name: ai-gateway-post-deploy
 spec:
-  # AI Gateway가 아직 생성되지 않은 경우 wait initContainer가 종료되고
-  # Job controller가 새 Pod로 재시도한다. activeDeadlineSeconds가 전체 상한이다.
-  backoffLimit: 30
+  backoffLimit: 0
   activeDeadlineSeconds: 900
   ttlSecondsAfterFinished: 86400
-  # 실제 사용자 스크립트 실패는 대기 재시도와 구분해 즉시 Job 실패로 처리한다.
-  podFailurePolicy:
-    rules:
-      - action: FailJob
-        onExitCodes:
-          containerName: run-script
-          operator: NotIn
-          values: [0]
   template:
     metadata:
       labels:
@@ -73,44 +63,23 @@ spec:
         fsGroup: 65534
         seccompProfile:
           type: RuntimeDefault
-      initContainers:
-        - name: wait-for-ai-gateway-deployments
-          image: registry.k8s.io/kubectl:v1.34.1
-          imagePullPolicy: IfNotPresent
-          command: ["kubectl"]
-          args:
-            - wait
-            - deployments
-            - --namespace=ai-gateway
-            - --selector=app.kubernetes.io/instance=ai-gateway
-            - --for=condition=Available
-            - --timeout=10m
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-        - name: wait-for-ai-gateway-pods
-          image: registry.k8s.io/kubectl:v1.34.1
-          imagePullPolicy: IfNotPresent
-          command: ["kubectl"]
-          args:
-            - wait
-            - pods
-            - --namespace=ai-gateway
-            - --selector=app.kubernetes.io/instance=ai-gateway
-            - --for=condition=Ready
-            - --timeout=10m
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
       containers:
         - name: run-script
-          image: alpine:3.22
+          # values.yaml의 ai-gateway.image와 반드시 같은 사내 이미지/tag를 쓴다.
+          image: registry.example.internal/gitlab/ai-gateway:self-hosted-v19.2.0-ee
           imagePullPolicy: IfNotPresent
-          command: ["/bin/sh", "/opt/post-deploy/run.sh"]
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              python /opt/post-deploy/wait_for_ready.py
+              exec /bin/sh /opt/post-deploy/run.sh
+          env:
+            - name: TARGET_NAMESPACE
+              value: ai-gateway
+            - name: TARGET_SELECTOR
+              value: app.kubernetes.io/instance=ai-gateway
+            - name: WAIT_TIMEOUT_SECONDS
+              value: "840"
           envFrom:
             - secretRef:
                 name: post-deploy-secret

@@ -12,6 +12,7 @@ configMapGenerator:
     namespace: ai-gateway
     files:
       - run.sh
+      - wait_for_ready.py
 
 # 스크립트 변경 시 같은 ConfigMap을 갱신한다. Job 재실행은 기존 Job을
 # 삭제한 뒤 kubectl apply -k . 로 명시적으로 수행한다.
